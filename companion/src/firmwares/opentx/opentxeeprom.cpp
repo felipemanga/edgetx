@@ -55,20 +55,22 @@ inline int MAX_SWITCHES(Board::Type board, int version)
   if (IS_TARANIS_X7(board))
     return 8;
 
-  return Boards::getCapability(board, Board::Switches);
+  return Boards::getCapability(board, Board::Switches)
+         - Boards::getCapability(board, Board::FlexSwitches)
+         - Boards::getCapability(board, Board::FunctionSwitches);
 }
 
 inline int MAX_SWITCHES_SOURCE(Board::Type board, int version)
 {
   if (IS_JUMPER_TPRO(board))  // 10 switches are allocated in EEprom but 6 are reserved for FS
-  return Boards::getCapability(board, Board::Switches);
+    return Boards::getCapability(board, Board::Switches);
   else
     return MAX_SWITCHES(board, version);
 }
 
 inline int MAX_SWITCHES_POSITION(Board::Type board, int version)
 {
-    if (IS_JUMPER_TPRO(board))
+  if (IS_JUMPER_TPRO(board))
     return Boards::getCapability(board, Board::SwitchesPositions);
   else if (IS_HORUS_OR_TARANIS(board))
     return MAX_SWITCHES(board, version) * 3;
@@ -216,6 +218,7 @@ inline int MAX_GYRO_ANALOGS(Board::Type board, int version)
 #define ROTENC_COUNT(board, version)          ((IS_STM32(board) && version >= 218) ? 0 : 1)
 #define MAX_AUX_TRIMS(board)                  ((IS_FAMILY_HORUS_OR_T16(board) && !IS_FLYSKY_NV14(board) && !IS_FLYSKY_PL18(board)) ? 2 : 0)
 #define MAX_SOURCE_TYPE_SPECIAL(board, version)    SOURCE_TYPE_SPECIAL_COUNT
+#define MAX_TIMERS(board, version)            3
 
 inline int switchIndex(int i, Board::Type board, unsigned int version)
 {
@@ -359,6 +362,8 @@ class SourcesConversionTable: public ConversionTable {
   public:
     SourcesConversionTable(Board::Type board, unsigned int version, unsigned int variant, unsigned long flags=0)
     {
+//      qDebug() << "version:" << version;
+
       int val=0;
 
       if (!(flags & FLAG_NONONE)) {
@@ -366,7 +371,7 @@ class SourcesConversionTable: public ConversionTable {
       }
 
       if (version >= 218 || IS_STM32(board)) {
-        for (int i=0; i<32; i++) {
+        for (int i=1; i<=32; i++) {
           addConversion(RawSource(SOURCE_TYPE_VIRTUAL_INPUT, i), val++);
         }
       }
@@ -374,58 +379,84 @@ class SourcesConversionTable: public ConversionTable {
       if (IS_STM32(board)) {
         for (int i = 0; i < MAX_SCRIPTS(board); i++) {
           for (int j = 0; j < 6; j++) {
-            addConversion(RawSource(SOURCE_TYPE_LUA_OUTPUT, i * 16 + j), val++);
+            addConversion(RawSource(SOURCE_TYPE_LUA_OUTPUT, i * 16 + j + 1), val++);
           }
         }
       }
 
-      for (int i=0; i<CPN_MAX_STICKS + MAX_POTS_SOURCES(board, version) + MAX_SLIDERS_SOURCES(board, version) + MAX_MOUSE_ANALOG_SOURCES(board, version) + MAX_GYRO_ANALOGS(board, version); i++) {
+//      qDebug() << "sticks:" << CPN_MAX_STICKS
+//               << "pots:" << MAX_POTS_SOURCES(board, version)
+//               << "pots storage:" << MAX_POTS_STORAGE(board, version)
+//               << "sliders:" << MAX_SLIDERS_SOURCES(board, version)
+//               << "sliders storage:" << MAX_SLIDERS_STORAGE(board, version)
+//               << "mouse:" << MAX_MOUSE_ANALOG_SOURCES(board, version)
+//               << "gyro:" << MAX_GYRO_ANALOGS(board, version);
+
+      for (int i=1; i<=CPN_MAX_STICKS + MAX_POTS_SOURCES(board, version) + MAX_SLIDERS_SOURCES(board, version) + MAX_MOUSE_ANALOG_SOURCES(board, version) + MAX_GYRO_ANALOGS(board, version); i++) {
         int offset = 0;
         if (version <= 218 && IS_HORUS_X10(board) && i >= CPN_MAX_STICKS + MAX_POTS_STORAGE(board, version))
           offset += 2;
         if (version <= 220 && (IS_HORUS_X10(board) || IS_FAMILY_T16(board)) && i >= CPN_MAX_STICKS + MAX_POTS_STORAGE(board, version))
           offset += 2;
 
-        addConversion(RawSource(SOURCE_TYPE_STICK, i + offset), val++);
+        //  ADC refactor shuffle of LS RS EXT1 and EXT2
+        if (IS_HORUS_X10(board) || IS_FAMILY_T16(board)) {
+          if (i > CPN_MAX_STICKS + MAX_POTS_STORAGE(board, version) - MAX_SLIDERS_SOURCES(board, version) &&
+              i < CPN_MAX_STICKS + MAX_POTS_STORAGE(board, version))
+            offset += 2;
+          else if (i > CPN_MAX_STICKS + MAX_POTS_STORAGE(board, version) &&
+                   i <= CPN_MAX_STICKS + MAX_POTS_STORAGE(board, version) + MAX_SLIDERS_SOURCES(board, version))
+            offset -= 4;
+          else if (i > CPN_MAX_STICKS + MAX_POTS_STORAGE(board, version) + MAX_SLIDERS_SOURCES(board, version))
+            offset -= 2;
+        }
+        //  end ADC refactor shuffle of LS RS EXT1 and EXT2
+
+        addConversion(RawSource(SOURCE_TYPE_INPUT, i + offset), val++);
+//        qDebug() << "i:" << i << "offset:" << offset << "Input:" << RawSource(SOURCE_TYPE_INPUT, i + offset).toString() << "val:" << val;
+//        qDebug() << "Input no offset:" << RawSource(SOURCE_TYPE_INPUT, i).toString() << "val:" << val;
       }
 
-      for (int i=0; i<MAX_ROTARY_ENCODERS(board); i++) {
+      for (int i=1; i<=MAX_ROTARY_ENCODERS(board); i++) {
         addConversion(RawSource(SOURCE_TYPE_ROTARY_ENCODER, 0), val++);
       }
 
       addConversion(RawSource(SOURCE_TYPE_MAX), val++);
 
-      for (int i=0; i<3; i++)
+      for (int i=1; i<=3; i++)
         addConversion(RawSource(SOURCE_TYPE_CYC, i), val++);
 
-      for (int i=0; i<MAX_TRIMS(board); i++)
+      for (int i=1; i<=MAX_TRIMS(board); i++)
         addConversion(RawSource(SOURCE_TYPE_TRIM, i), val++);
 
-      addConversion(RawSource(SOURCE_TYPE_SWITCH, 0), val++);
-
       if (!(flags & FLAG_NOSWITCHES)) {
-        for (int i=1; i<MAX_SWITCHES_SOURCE(board, version); i++)
+        for (int i=1; i<=MAX_SWITCHES_SOURCE(board, version); i++) {
           addConversion(RawSource(SOURCE_TYPE_SWITCH, i), val++);
-        for (int i=0; i<MAX_FUNCTIONSWITCHES(board, version); i++)
-           addConversion(RawSource(SOURCE_TYPE_FUNCTIONSWITCH, i), val++);
-        for (int i=0; i<MAX_LOGICAL_SWITCHES(board, version); i++)
+        }
+        for (int i=1; i<=MAX_FUNCTIONSWITCHES(board, version); i++) {
+          addConversion(RawSource(SOURCE_TYPE_FUNCTIONSWITCH, i), val++);
+        }
+        for (int i=1; i<=MAX_LOGICAL_SWITCHES(board, version); i++) {
           addConversion(RawSource(SOURCE_TYPE_CUSTOM_SWITCH, i), val++);
+        }
       }
 
-      for (int i=0; i<NUM_PPM_INPUTS(board, version); i++) {
+      for (int i=1; i<=NUM_PPM_INPUTS(board, version); i++) {
         addConversion(RawSource(SOURCE_TYPE_PPM, i), val++);
       }
 
-      for (int i=0; i<MAX_CHANNELS(board, version); i++) {
+      for (int i=1; i<=MAX_CHANNELS(board, version); i++) {
         addConversion(RawSource(SOURCE_TYPE_CH, i), val++);
       }
 
       if (!(flags & FLAG_NOTELEMETRY)) {
-        for (int i=0; i<MAX_GVARS(board, version); i++)
+        for (int i=1; i<=MAX_GVARS(board, version); i++)
           addConversion(RawSource(SOURCE_TYPE_GVAR, i), val++);
-        for (int i=0; i<MAX_SOURCE_TYPE_SPECIAL(board, version); i++)
+        for (int i=1; i<=MAX_SOURCE_TYPE_SPECIAL(board, version); i++)
           addConversion(RawSource(SOURCE_TYPE_SPECIAL, i), val++);
-        for (int i=0; i<MAX_TELEMETRY_SENSORS(board, version)*3; ++i) {
+        for (int i=1; i<=MAX_TIMERS(board, version); i++)
+          addConversion(RawSource(SOURCE_TYPE_TIMER, i), val++);
+        for (int i=1; i<=MAX_TELEMETRY_SENSORS(board, version)*3; ++i) {
           addConversion(RawSource(SOURCE_TYPE_TELEMETRY, i), val++);
         }
       }
@@ -1094,7 +1125,7 @@ class InputField: public TransformedField {
     void afterImport() override
     {
       if (!IS_STM32(board) && expo.mode) {
-        expo.srcRaw = RawSource(SOURCE_TYPE_STICK, expo.chn);
+        expo.srcRaw = RawSource(SOURCE_TYPE_INPUT, expo.chn);
       }
 
       expo.weight = smallGvarExport(_weight);
@@ -1492,12 +1523,11 @@ class CustomFunctionsConversionTable: public ConversionTable {
       addConversion(FuncInstantTrim, val++);
 
       addConversion(FuncReset, val++);
-      addConversion(FuncSetTimer1, val);
-      addConversion(FuncSetTimer2, val);
-      addConversion(FuncSetTimer3, val);
+      for (int i = 0; i < MAX_TIMERS(board, version); i++)
+        addConversion(FuncSetTimer1 + i, val);
       val++;
-      for (int i=0; i<MAX_GVARS(board, version); i++)
-        addConversion(FuncAdjustGV1+i, val);
+      for (int i = 0; i < MAX_GVARS(board, version); i++)
+        addConversion(FuncAdjustGV1 + i, val);
       val++;
       addConversion(FuncVolume, val++);
       addConversion(FuncSetFailsafe, val++);
@@ -1606,14 +1636,14 @@ class ArmCustomFunctionField: public TransformedField {
         else
           _active = (fn.enabled ? 1 : 0);
 
-        if (fn.func >= FuncOverrideCH1 && fn.func <= FuncOverrideCH32) {
+        if (fn.func >= FuncOverrideCH1 && fn.func <= FuncOverrideCHLast) {
           *((uint16_t *)_param) = fn.param;
           *((uint8_t *)(_param+3)) = fn.func - FuncOverrideCH1;
         }
         else if (fn.func >= FuncTrainer && fn.func <= FuncTrainerChannels) {
           *((uint8_t *)(_param+3)) = fn.func - FuncTrainer;
         }
-        else if (fn.func >= FuncSetTimer1 && fn.func <= FuncSetTimer3) {
+        else if (fn.func >= FuncSetTimer1 && fn.func <= FuncSetTimerLast) {
           *((uint16_t *)_param) = fn.param;
           *((uint8_t *)(_param+3)) = fn.func - FuncSetTimer1;
         }
@@ -1666,11 +1696,11 @@ class ArmCustomFunctionField: public TransformedField {
       mode = *((uint8_t *)(_param+2));
       index = *((uint8_t *)(_param+3));
 
-      if (fn.func >= FuncOverrideCH1 && fn.func <= FuncOverrideCH32) {
+      if (fn.func >= FuncOverrideCH1 && fn.func <= FuncOverrideCHLast) {
         fn.func = AssignFunc(fn.func + index);
         fn.param = (int16_t)(uint16_t)value;
       }
-      else if (fn.func >= FuncSetTimer1 && fn.func <= FuncSetTimer3) {
+      else if (fn.func >= FuncSetTimer1 && fn.func <= FuncSetTimerLast) {
         fn.func = AssignFunc(fn.func + index);
         fn.param = (int)value;
       }
