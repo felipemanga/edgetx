@@ -29,6 +29,7 @@
 #if defined(BLUETOOTH)
 #include "bluetooth_driver.h"
 #endif
+#include "trainer.h"
 
 #include "hal/adc_driver.h"
 #include "hal/module_port.h"
@@ -1613,6 +1614,19 @@ int cliResetGT911(const char** argv)
 }
 #endif
 
+int cliFrame(const char **argv) {
+  int channel = 0, val = 0;
+  for (; toInt(argv, channel + 1, &val) > 0; ++channel) {
+	  trainerInput[channel] = val;
+  }
+  cliSerialPrint("frame size: %d", channel);
+  for (; channel < MAX_TRAINER_CHANNELS; ++channel) {
+	  trainerInput[channel] = 0;
+  }
+  trainerResetTimer();
+  return 0;
+}
+
 const CliCommand cliCommands[] = {
   { "beep", cliBeep, "[<frequency>] [<duration>]" },
   { "ls", cliLs, "<directory>" },
@@ -1622,6 +1636,7 @@ const CliCommand cliCommands[] = {
   { "play", cliPlay, "<filename>" },
   { "reboot", cliReboot, "[wdt]" },
   { "set", cliSet, "<what> <value>" },
+  { "frame", cliFrame, "<channel overrides>" },
 #if defined(ENABLE_SERIAL_PASSTHROUGH)
   { "serialpassthrough", cliSerialPassthrough, "<port type> <port number>"},
 #endif
