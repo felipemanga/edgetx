@@ -1614,12 +1614,29 @@ int cliResetGT911(const char** argv)
 }
 #endif
 
+int cliEnableFunc(const char **argv) {
+  int funcNumber{-1};
+  int funcEnabled{-1};
+  if (toInt(argv, 1, &funcNumber) == 0) return 0;
+  if (funcNumber < 0 || funcNumber > MAX_SPECIAL_FUNCTIONS) {
+    cliSerialPrint("Invalid function %d (max is %d)", funcNumber, MAX_SPECIAL_FUNCTIONS);
+    return 0;
+  }
+  CustomFunctionData * cfn = &g_eeGeneral.customFn[funcNumber];
+  if (toInt(argv, 2, &funcEnabled) == 0) {
+    cliSerialPrint("read func %d is %d", funcNumber, CFN_ACTIVE(cfn));
+  } else {
+    cliSerialPrint("write func %d is %d", funcNumber, CFN_ACTIVE(cfn) = funcEnabled);
+  }
+  return 0;
+}
+
 int cliFrame(const char **argv) {
   int channel = 0, val = 0;
   for (; toInt(argv, channel + 1, &val) > 0; ++channel) {
 	  trainerInput[channel] = val;
   }
-  cliSerialPrint("frame size: %d", channel);
+  cliSerialPrint("%d", channel);
   for (; channel < MAX_TRAINER_CHANNELS; ++channel) {
 	  trainerInput[channel] = 0;
   }
@@ -1637,6 +1654,7 @@ const CliCommand cliCommands[] = {
   { "reboot", cliReboot, "[wdt]" },
   { "set", cliSet, "<what> <value>" },
   { "frame", cliFrame, "<channel overrides>" },
+  { "enableFunc", cliEnableFunc, "<func number> [0 | 1]"},
 #if defined(ENABLE_SERIAL_PASSTHROUGH)
   { "serialpassthrough", cliSerialPassthrough, "<port type> <port number>"},
 #endif
